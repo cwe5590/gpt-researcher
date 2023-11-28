@@ -3,7 +3,7 @@ from gpt_researcher.config import Config
 from gpt_researcher.master.functions import *
 from gpt_researcher.context.compression import ContextCompressor
 from gpt_researcher.memory import Memory
-
+import httpx
 
 class GPTResearcher:
     """
@@ -77,6 +77,15 @@ class GPTResearcher:
 
         return new_urls
 
+    def exhaust_iter(self, urls):
+        while True:
+            try:
+                yield next(urls)
+            except httpx.HTTPError:
+                continue
+            except StopIteration:
+                return
+
     async def scrape_sites_by_query(self, sub_query):
         """
         Runs a sub-query
@@ -89,7 +98,8 @@ class GPTResearcher:
         # Get Urls
         retriever = self.retriever(sub_query)
         search_results = retriever.search(max_results=self.cfg.max_search_results_per_query)
-        new_search_urls = await self.get_new_urls([url.get("href") for url in search_results])
+
+        new_search_urls = await self.get_new_urls([url.get("href") for url in self.exhaust_iter(search_results)])
 
         # Scrape Urls
         # await stream_output("logs", f"📝Scraping urls {new_search_urls}...\n", self.websocket)
